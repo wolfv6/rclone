@@ -801,7 +801,7 @@ func (f *Fs) Rmdir(dir string) error {
 			fs.Debugf(dir, "rmdir: read %v from temp fs", len(queuedEntries))
 			fs.Debugf(dir, "rmdir: temp fs entries: %v", queuedEntries)
 			if len(queuedEntries) > 0 {
-				fs.Errorf(dir, "rmdir: temporary dir not empty")
+				fs.Errorf(dir, "rmdir: temporary dir not empty: %v", queuedEntries)
 				return fs.ErrorDirectoryNotEmpty
 			}
 		}
@@ -1030,6 +1030,11 @@ func (f *Fs) put(in io.Reader, src fs.ObjectInfo, options []fs.OpenOption, put p
 
 	// queue for upload and store in temp fs if configured
 	if f.tempWritePath != "" {
+		// we need to clear the caches before a put through temp fs
+		parentCd := NewDirectory(f, cleanPath(path.Dir(src.Remote())))
+		_ = f.cache.ExpireDir(parentCd)
+		f.notifyDirChangeUpstreamIfNeeded(parentCd.Remote())
+
 		obj, err = f.tempFs.Put(in, src, options...)
 		if err != nil {
 			fs.Errorf(obj, "put: failed to upload in temp fs: %v", err)
